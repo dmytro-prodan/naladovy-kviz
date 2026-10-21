@@ -107,8 +107,15 @@
           <label for="account-password">Heslo<input id="account-password" name="password" type="password" autocomplete="current-password" minlength="7" required><small>Najmenej 7 znakov a aspoň jedno číslo alebo symbol.</small></label>
           <button class="action" id="account-submit" type="submit">Prihlásiť sa</button>
           <p class="account-status" id="account-auth-status" role="status" aria-live="polite"></p>
+          <div id="verification-actions" hidden>
+            <div class="account-actions">
+              <button id="resend-verification" class="secondary" type="button">Poslať overovací e-mail znova</button>
+              <button id="check-verification" type="button">Už som overil/a</button>
+            </div>
+            <button id="unverified-logout" class="action secondary" type="button">Odhlásiť neoverený účet</button>
+          </div>
         </form>
-        <p class="login-note">Účet zabezpečuje Firebase. Tvoje heslo sa na tejto stránke neukladá.</p>
+        <p class="login-note">Pri účte cez e-mail sa najprv vyžaduje potvrdenie e-mailovej adresy.</p>
       </div>
     </section>
 
@@ -306,9 +313,16 @@
       accountSubmit.disabled=true;
       accountStatus.textContent=accountMode==='create'?'Vytváram účet…':'Prihlasujem…';
       try {
-        await window.submitFirebaseAccount({mode:accountMode,name:accountName.value.trim(),email:document.querySelector('#account-email').value.trim(),password});
+        const result=await window.submitFirebaseAccount({mode:accountMode,name:accountName.value.trim(),email:document.querySelector('#account-email').value.trim(),password});
         accountPassword.value='';
-        accountStatus.textContent='';
+        if (result?.verificationSent) {
+          accountStatus.textContent=`Overovací odkaz sme poslali na ${document.querySelector('#account-email').value.trim()}. Otvor ho a potom sa prihlás.`;
+        } else if (result?.needsVerification) {
+          accountStatus.textContent='E-mail ešte nie je potvrdený. Otvor overovací odkaz alebo si ho pošli znova.';
+          document.querySelector('#verification-actions').hidden=false;
+        } else {
+          accountStatus.textContent='';
+        }
       } catch(error) {
         const messages={
           'auth/email-already-in-use':'Tento e-mail už má účet. Skús sa prihlásiť.',
@@ -543,20 +557,78 @@
           import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')
         ]);
         const {initializeApp}=appSdk;
-        const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,createUserWithEmailAndPassword,signInWithEmailAndPassword,updateProfile}=authSdk;
+        const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,createUserWithEmailAndPassword,signInWithEmailAndPassword,updateProfile,sendEmailVerification,reload}=authSdk;
         const app=initializeApp(firebaseConfig);
         const auth=getAuth(app);
         const provider=new GoogleAuthProvider();
+        let registrationInProgress=false;
         auth.languageCode='sk';
         window.submitFirebaseAccount=async({mode,name,email,password})=>{
           if (mode==='create') {
-            const credential=await createUserWithEmailAndPassword(auth,email,password);
-            await updateProfile(credential.user,{displayName:name});
-            window.completeGoogleLogin(credential.user);
+            registrationInProgress=true;
+            try {
+              const credential=await createUserWithEmailAndPassword(auth,email,password);
+              await updateProfile(credential.user,{displayName:name});
+              await sendEmailVerification(credential.user);
+              await signOut(auth);
+              return {verificationSent:true};
+            } catch(error) {
+              if (auth.currentUser && !auth.currentUser.emailVerified) await signOut(auth);
+              throw error;
+            } finally {
+              registrationInProgress=false;
+            }
           } else {
-            await signInWithEmailAndPassword(auth,email,password);
+            const credential=await signInWithEmailAndPassword(auth,email,password);
+            return credential.user.emailVerified ? {signedIn:true} : {needsVerification:true};
           }
         };
+        window.resendFirebaseVerification=async()=>{
+          const user=auth.currentUser;
+          if (!user || user.emailVerified) throw new Error('No unverified signed-in user');
+          await sendEmailVerification(user);
+        };
+        window.checkFirebaseVerification=async()=>{
+          const user=auth.currentUser;
+          if (!user) return false;
+          await reload(user);
+          return user.emailVerified;
+        };
+        document.querySelector('#resend-verification').addEventListener('click',async event=>{
+          const button=event.currentTarget;
+          button.disabled=true;
+          try {
+            await window.resendFirebaseVerification();
+            document.querySelector('#account-auth-status').textContent='Poslali sme nový overovací odkaz. Skontroluj si e-mail aj priečinok so spamom.';
+          } catch(error) {
+            document.querySelector('#account-auth-status').textContent='Overovací e-mail sa nepodarilo odoslať. Skús to o chvíľu znova.';
+          } finally {
+            button.disabled=false;
+          }
+        });
+        document.querySelector('#check-verification').addEventListener('click',async event=>{
+          const button=event.currentTarget;
+          button.disabled=true;
+          document.querySelector('#account-auth-status').textContent='Kontrolujem potvrdenie e-mailu…';
+          try {
+            const verified=await window.checkFirebaseVerification();
+            if (verified) {
+              document.querySelector('#verification-actions').hidden=true;
+              window.completeGoogleLogin(auth.currentUser);
+            } else {
+              document.querySelector('#account-auth-status').textContent='Potvrdenie ešte neevidujeme. Otvor odkaz v e-maile a skús znova.';
+            }
+          } catch(error) {
+            document.querySelector('#account-auth-status').textContent='Stav overenia sa nepodarilo skontrolovať. Obnov stránku a skús znova.';
+          } finally {
+            button.disabled=false;
+          }
+        });
+        document.querySelector('#unverified-logout').addEventListener('click',async()=>{
+          await signOut(auth);
+          document.querySelector('#verification-actions').hidden=true;
+          document.querySelector('#account-auth-status').textContent='';
+        });
         signInButton.disabled=false;
         status.textContent='Prihlás sa bezpečne pomocou svojho Google účtu.';
         signInButton.addEventListener('click',async()=>{
@@ -575,6 +647,15 @@
         });
         window.signOutGoogleUser=()=>signOut(auth);
         onAuthStateChanged(auth,user=>{
+          const verificationActions=document.querySelector('#verification-actions');
+          const accountStatus=document.querySelector('#account-auth-status');
+          if (registrationInProgress) return;
+          if (user && user.providerData.some(item=>item.providerId==='password') && !user.emailVerified) {
+            verificationActions.hidden=false;
+            accountStatus.textContent='E-mail ešte nie je potvrdený. Otvor overovací odkaz a potom sa vráť sem.';
+            return;
+          }
+          verificationActions.hidden=true;
           if (user) window.completeGoogleLogin(user);
         });
       } catch(error) {
