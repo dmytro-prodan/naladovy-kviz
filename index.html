@@ -45,6 +45,14 @@
     .login-form input { display:block; width:100%; min-height:54px; margin-top:8px; padding:0 15px; border:2px solid #718477; border-radius:11px; background:#f7faf6; color:var(--ink); font:inherit; box-shadow:inset 0 1px 2px #20241f10; transition:border-color .16s,background .16s,box-shadow .16s }
     .login-form input:hover { border-color:#4f6d5b }
     .login-form input:focus { outline:3px solid #c8dfc3; outline-offset:2px; border-color:var(--green); background:#fff; box-shadow:0 0 0 1px var(--green) }
+    .google-login { margin:18px 0 8px }
+    .google-button { display:flex; align-items:center; justify-content:center; gap:11px; width:100%; min-height:50px; border:1px solid #aab5aa; background:#fff; color:var(--ink) }
+    .google-button:hover:not(:disabled) { background:#f6f8f3; border-color:var(--green) }
+    .google-button:disabled { cursor:not-allowed; opacity:.62 }
+    .google-button svg { width:19px; height:19px; flex:none }
+    .google-status { margin:8px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; text-align:center }
+    .login-divider { display:flex; align-items:center; gap:12px; margin:20px 0 0; color:var(--muted); font-size:.78rem }
+    .login-divider::before,.login-divider::after { content:""; height:1px; flex:1; background:var(--line) }
     .menu-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0 }
     .menu-buttons button { padding:12px; border-color:var(--green); background:var(--green); color:#fff }
     .menu-buttons button.secondary { background:#fff; color:var(--green) }
@@ -75,6 +83,14 @@
       <header><div class="eyebrow">Vitaj na stránke nálady</div><h1>Prihlásenie</h1><p>Prihlás sa a otvor svoje menu testov.</p></header>
       <div class="panel">
         <h2>Tvoj účet</h2>
+        <div class="google-login">
+          <button class="google-button" id="google-signin" type="button" disabled>
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.9c-.58 2.96-2.25 5.47-4.73 7.16l7.66 5.94c4.47-4.13 7.15-10.2 7.15-17.57Z"/><path fill="#FBBC05" d="M10.54 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.2A23.9 23.9 0 0 0 0 24c0 3.87.93 7.54 2.56 10.78l7.98-6.19Z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.88l-7.66-5.94c-2.13 1.43-4.86 2.27-8.24 2.27-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"/></svg>
+            Pokračovať cez Google
+          </button>
+          <p class="google-status" id="google-auth-status" role="status">Na zapnutie Google prihlásenia treba najprv nastaviť Firebase projekt.</p>
+        </div>
+        <p class="login-divider"><span>alebo ukážkový vstup</span></p>
         <form class="login-form" id="login-form">
           <label for="username">Používateľské meno<input id="username" name="username" autocomplete="username" minlength="3" maxlength="12" required><small>3 až 12 znakov, musí obsahovať aspoň jedno písmeno.</small></label>
           <label for="password">Heslo<input id="password" name="password" type="password" autocomplete="current-password" minlength="7" required><small>Najmenej 7 znakov, aspoň jedno číslo alebo symbol.</small></label>
@@ -269,7 +285,15 @@
       passwordInput.value='';
       showScreen(menuScreen);
     });
-    document.querySelector('#logout').addEventListener('click',()=>showScreen(loginScreen));
+    document.querySelector('#logout').addEventListener('click',async()=>{
+      if (window.signOutGoogleUser) await window.signOutGoogleUser();
+      showScreen(loginScreen);
+    });
+    window.completeGoogleLogin=user=>{
+      const name=(user.displayName || user.email || 'Google používateľ').trim();
+      document.querySelector('#welcome-name').textContent=name;
+      showScreen(menuScreen);
+    };
     document.querySelector('#start-mood-test').addEventListener('click',()=>openTest('mood'));
     document.querySelector('#start-achievement-test').addEventListener('click',()=>openTest('achievement'));
     document.querySelector('#start-focus-test').addEventListener('click',()=>openTest('focus'));
@@ -420,6 +444,55 @@
 
     document.querySelector('#again').addEventListener('click',newRound);
     newRound();
+  </script>
+  <script type="module">
+    // Replace these public web-app values with the config from Firebase project settings.
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDBm82CkUk2he5dSAYjL-Q59pVgwTalZCI',
+      authDomain: 'naladovy-kviz.firebaseapp.com',
+      projectId: 'naladovy-kviz',
+      appId: '1:387543788613:web:a2a55425be25b575a1472c'
+    };
+    const signInButton=document.querySelector('#google-signin');
+    const status=document.querySelector('#google-auth-status');
+    const configReady=Object.values(firebaseConfig).every(value=>value && !value.startsWith('PASTE_'));
+
+    if (configReady) {
+      try {
+        const [appSdk,authSdk]=await Promise.all([
+          import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')
+        ]);
+        const {initializeApp}=appSdk;
+        const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut}=authSdk;
+        const app=initializeApp(firebaseConfig);
+        const auth=getAuth(app);
+        const provider=new GoogleAuthProvider();
+        auth.languageCode='sk';
+        signInButton.disabled=false;
+        status.textContent='Prihlás sa bezpečne pomocou svojho Google účtu.';
+        signInButton.addEventListener('click',async()=>{
+          signInButton.disabled=true;
+          status.textContent='Otváram prihlásenie Google…';
+          try {
+            const result=await signInWithPopup(auth,provider);
+            window.completeGoogleLogin(result.user);
+          } catch(error) {
+            status.textContent=error.code==='auth/popup-closed-by-user'
+              ? 'Prihlásenie bolo zatvorené. Môžeš to skúsiť znova.'
+              : 'Prihlásenie cez Google sa nepodarilo. Skontroluj nastavenia a skús znova.';
+          } finally {
+            signInButton.disabled=false;
+          }
+        });
+        window.signOutGoogleUser=()=>signOut(auth);
+        onAuthStateChanged(auth,user=>{
+          if (user) window.completeGoogleLogin(user);
+        });
+      } catch(error) {
+        status.textContent='Google prihlásenie sa nepodarilo načítať. Skontroluj Firebase konfiguráciu.';
+      }
+    }
   </script>
 </body>
 </html>
