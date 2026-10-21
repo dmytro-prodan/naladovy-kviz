@@ -561,6 +561,7 @@
         const app=initializeApp(firebaseConfig);
         const auth=getAuth(app);
         const provider=new GoogleAuthProvider();
+        const verificationActionSettings={url:'https://dmytro-prodan.github.io/naladovy-kviz/?emailVerification=1'};
         let registrationInProgress=false;
         auth.languageCode='sk';
         window.submitFirebaseAccount=async({mode,name,email,password})=>{
@@ -569,7 +570,7 @@
             try {
               const credential=await createUserWithEmailAndPassword(auth,email,password);
               await updateProfile(credential.user,{displayName:name});
-              await sendEmailVerification(credential.user);
+              await sendEmailVerification(credential.user,verificationActionSettings);
               await signOut(auth);
               return {verificationSent:true};
             } catch(error) {
@@ -586,7 +587,7 @@
         window.resendFirebaseVerification=async()=>{
           const user=auth.currentUser;
           if (!user || user.emailVerified) throw new Error('No unverified signed-in user');
-          await sendEmailVerification(user);
+          await sendEmailVerification(user,verificationActionSettings);
         };
         window.checkFirebaseVerification=async()=>{
           const user=auth.currentUser;
