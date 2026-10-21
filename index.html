@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5f0">
+  <title>Ako sa dnes cítiš?</title>
+  <style>
+    :root { color-scheme:light; --ink:#20241f; --muted:#687168; --paper:#f7f5f0; --green:#2c5b48; --lime:#d9edb8; --line:#e5e5dc; }
+    * { box-sizing:border-box }
+    body { margin:0; min-height:100vh; padding:46px 20px; background:radial-gradient(ellipse at 50% 0%,#e8eedf 0%,var(--paper) 56%); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif }
+    main { width:min(720px,100%); margin:0 auto }
+    header { text-align:center; margin:12px 0 36px }
+    .eyebrow { color:var(--green); font-size:.76rem; font-weight:750; letter-spacing:.16em; text-transform:uppercase }
+    h1 { margin:12px 0 10px; font-family:Georgia,serif; font-size:clamp(2.6rem,8vw,4rem); font-weight:500; letter-spacing:-.045em }
+    header p { margin:0; color:var(--muted); font-size:1.04rem }
+    .progress { height:5px; margin:0 0 17px; overflow:hidden; border-radius:9px; background:#e6e8df }
+    .progress span { display:block; width:0; height:100%; border-radius:inherit; background:var(--green); transition:width .25s ease }
+    .count { margin:0 0 12px; color:var(--muted); font-size:.86rem }
+    .question { margin:0 0 14px; padding:26px 27px; border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.83); box-shadow:0 8px 26px #28321b0a }
+    .question h2 { margin:0 0 20px; font-size:1.12rem; font-weight:650; line-height:1.45 }
+    .answers { display:grid; grid-template-columns:repeat(3,1fr); gap:10px }
+    button { min-height:46px; border:1px solid #dfe2d8; border-radius:11px; background:#fff; color:var(--ink); font:inherit; font-weight:650; cursor:pointer; transition:background .16s,border-color .16s,transform .16s }
+    button:hover { transform:translateY(-1px); border-color:#9eae9f }
+    button[aria-pressed="true"] { border-color:var(--green); background:var(--green); color:#fff }
+    .result { display:none; margin-top:22px; padding:26px; border:1px solid #dce5d3; border-radius:18px; background:rgba(255,255,255,.86); text-align:center }
+    .result.show { display:block; animation:appear .25s ease }
+    .result h2 { margin:0 0 8px; font-family:Georgia,serif; font-size:1.8rem; font-weight:500 }
+    .result p { margin:0; line-height:1.6 }
+    .mood { margin:22px auto 8px; width:min(440px,100%); text-align:left }
+    .mood-labels { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; color:var(--muted); font-size:.78rem }
+    .meter { height:14px; position:relative; border-radius:20px; background:linear-gradient(90deg,#b9c7ea 0%,#e9ddb0 50%,#a8d5a9 100%) }
+    .marker { position:absolute; top:50%; left:50%; width:22px; height:22px; border:3px solid white; border-radius:50%; background:#26392d; box-shadow:0 1px 7px #17251d55; transform:translate(-50%,-50%); transition:left .35s ease }
+    .scale-number { display:block; margin-top:8px; color:var(--muted); font-size:.78rem; text-align:center }
+    .actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:20px }
+    .action { padding:0 20px; border-color:var(--green); background:var(--green); color:#fff }
+    .action.secondary { background:transparent; color:var(--green) }
+    .screen[hidden] { display:none }
+    .panel { margin:20px 0; padding:28px; border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.86); box-shadow:0 8px 26px #28321b0a }
+    .panel h2 { margin:0 0 10px; font-family:Georgia,serif; font-size:1.8rem; font-weight:500 }
+    .panel > p { color:var(--muted); line-height:1.55 }
+    .login-form { display:grid; gap:12px; margin-top:22px }
+    .login-form label { font-size:.9rem; font-weight:650 }
+    .login-form small { display:block; margin-top:5px; color:var(--muted); font-size:.78rem; font-weight:400 }
+    .login-form input { width:100%; min-height:48px; margin-top:6px; padding:0 13px; border:1px solid #dfe2d8; border-radius:10px; background:#fff; color:var(--ink); font:inherit }
+    .login-form input:focus { outline:2px solid #9db69c; outline-offset:1px }
+    .menu-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0 }
+    .menu-buttons button { padding:12px; border-color:var(--green); background:var(--green); color:#fff }
+    .menu-buttons button.secondary { background:#fff; color:var(--green) }
+    .topline { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:4px 0 18px }
+    .topline button { min-height:40px; padding:0 14px }
+    .menu-meter { margin-top:20px }
+    .productivity-panel { margin-top:28px; padding:24px; border:1px solid #cfdcc8; border-radius:16px; background:linear-gradient(135deg,#edf4e5,#fff) }
+    .productivity-panel h2 { margin:0 0 8px; font-family:Georgia,serif; font-size:1.7rem; font-weight:500 }
+    .productivity-score { margin:20px 0 4px; font-size:clamp(2.5rem,10vw,4rem); font-weight:750; letter-spacing:-.06em; text-align:center; color:var(--green) }
+    .productivity-meter { height:20px }
+    .productivity-marker { width:30px; height:30px }
+    .tip { margin:18px 0 0; padding:14px; border-radius:12px; background:#fff; line-height:1.55 }
+    .action.large { width:100%; min-height:58px; margin-top:16px; font-size:1.08rem }
+    .login-note { font-size:.8rem; text-align:center }
+    .note { margin:22px 0 0; color:var(--muted); font-size:.8rem; text-align:center }
+    .emoji-rain { position:fixed; inset:0; z-index:10; overflow:hidden; pointer-events:none }
+    .rain-emoji { position:absolute; top:-3rem; animation:fall 5s linear forwards; will-change:transform,opacity; filter:drop-shadow(0 2px 3px #17251d22) }
+    @keyframes fall { 0% { transform:translate3d(0,-5vh,0) rotate(0deg); opacity:0 } 8% { opacity:1 } 90% { opacity:1 } 100% { transform:translate3d(var(--drift),110vh,0) rotate(var(--spin)); opacity:0 } }
+    @media(prefers-reduced-motion:reduce) { .rain-emoji { animation-duration:2s } }
+    @keyframes appear { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+    @media(max-width:480px) { body { padding:30px 14px } .question { padding:21px 17px } .answers { gap:7px } button { font-size:.92rem } }
+  </style>
+</head>
+<body>
+  <div class="emoji-rain" id="emoji-rain" aria-hidden="true"></div>
+  <main>
+    <section class="screen" id="login-screen">
+      <header><div class="eyebrow">Vitaj na stránke nálady</div><h1>Prihlásenie</h1><p>Prihlás sa a otvor svoje menu testov.</p></header>
+      <div class="panel">
+        <h2>Tvoj účet</h2>
+        <form class="login-form" id="login-form">
+          <label for="username">Používateľské meno<input id="username" name="username" autocomplete="username" minlength="3" maxlength="12" required><small>3 až 12 znakov, musí obsahovať aspoň jedno písmeno.</small></label>
+          <label for="password">Heslo<input id="password" name="password" type="password" autocomplete="current-password" minlength="7" required><small>Najmenej 7 znakov, aspoň jedno číslo alebo symbol.</small></label>
+          <button class="action" type="submit">Prihlásiť sa</button>
+        </form>
+        <p class="login-note">Ukážkové prihlásenie: údaje sa neoverujú ani neukladajú. Na skutočné účty je potrebný server.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="menu-screen" hidden>
+      <div class="topline"><span class="eyebrow">Tvoje menu</span><button class="action secondary" id="logout" type="button">Odhlásiť sa</button></div>
+      <header><h1>Ahoj, <span id="welcome-name">priateľ/ka</span>!</h1><p>Vyber si, čo chceš dnes zistiť.</p></header>
+      <div class="panel">
+        <h2>Testy</h2>
+        <div class="menu-buttons">
+          <button id="start-mood-test" type="button">Ako sa dnes cítiš? 🌿</button>
+          <button class="secondary" id="start-achievement-test" type="button">Čo som dnes dosiahol/a? 🎯</button>
+          <button class="secondary" id="start-focus-test" type="button">Ako som sa sústredil/a? 🧠</button>
+          <button class="secondary" id="start-balance-test" type="button">Ako som si rozdelil/a deň? ⚖️</button>
+        </div>
+        <div class="menu-meter" id="dashboard-score">
+          <h3>Nálada</h3><p id="dashboard-copy">Zatiaľ si test nálady neabsolvoval/a.</p>
+          <div class="mood" role="img" aria-label="Tvoja náladová mierka od 0 do 100">
+            <div class="mood-labels"><span>Pokojnejšie</span><span>Vyvážene</span><span>Žiarivo</span></div>
+            <div class="meter"><span class="marker" id="dashboard-marker" style="left:50%"></span></div>
+            <span class="scale-number" id="dashboard-number">Čaká na prvý výsledok</span>
+          </div>
+        </div>
+        <div class="menu-meter" id="achievement-score">
+          <h3>Dnešný pokrok</h3><p id="achievement-copy">Zatiaľ si test pokroku neabsolvoval/a.</p>
+          <div class="mood" role="img" aria-label="Mierka dnešného pokroku od 0 do 100">
+            <div class="mood-labels"><span>Ešte nie</span><span>Čiastočne</span><span>Podarilo sa</span></div>
+            <div class="meter"><span class="marker" id="achievement-marker" style="left:50%"></span></div>
+            <span class="scale-number" id="achievement-number">Čaká na prvý výsledok</span>
+          </div>
+        </div>
+        <div class="menu-meter" id="focus-score">
+          <h3>Sústredenie</h3><p id="focus-copy">Zatiaľ si test sústredenia neabsolvoval/a.</p>
+          <div class="mood" role="img" aria-label="Mierka sústredenia od 0 do 100">
+            <div class="mood-labels"><span>Rozptýlene</span><span>Čiastočne</span><span>Sústredene</span></div>
+            <div class="meter"><span class="marker" id="focus-marker" style="left:50%"></span></div>
+            <span class="scale-number" id="focus-number">Čaká na prvý výsledok</span>
+          </div>
+        </div>
+        <div class="menu-meter" id="balance-score">
+          <h3>Plán a oddych</h3><p id="balance-copy">Zatiaľ si test rovnováhy neabsolvoval/a.</p>
+          <div class="mood" role="img" aria-label="Mierka plánovania a oddychu od 0 do 100">
+            <div class="mood-labels"><span>Bez rovnováhy</span><span>Čiastočne</span><span>Dobrá rovnováha</span></div>
+            <div class="meter"><span class="marker" id="balance-marker" style="left:50%"></span></div>
+            <span class="scale-number" id="balance-number">Čaká na prvý výsledok</span>
+          </div>
+        </div>
+        <button class="action large" id="show-score" type="button" hidden>Prejsť ku výsledkom</button>
+        <section class="productivity-panel" id="productivity-panel" aria-live="polite" hidden>
+          <h2>Moja produktivita za deň</h2>
+          <p id="productivity-copy">Absolvuj všetky štyri testy a zobrazí sa tvoja spoločná mierka.</p>
+          <div class="productivity-score" id="productivity-score">—</div>
+          <div class="meter productivity-meter"><span class="marker productivity-marker" id="productivity-marker" style="left:50%"></span></div>
+          <div class="mood-labels"><span>Nízka</span><span>Stredná</span><span>Vysoká</span></div>
+          <p class="tip" id="productivity-tip">Výsledok je orientačný a vznikne z priemeru všetkých štyroch mierok.</p>
+        </section>
+      </div>
+      <p class="note">Výsledok je len hravá momentka nálady, nie psychologický test.</p>
+    </section>
+
+    <section class="screen" id="test-screen" hidden>
+      <div class="topline"><button class="action secondary" id="back-menu" type="button">← Späť do menu</button><span class="eyebrow">3 náhodné otázky z 12</span></div>
+      <header><h1 id="test-title">Ako sa dnes cítiš?</h1><p id="test-description">Vyber odpoveď, ktorá najlepšie vystihuje dnešný deň.</p></header>
+      <div class="progress" aria-label="Priebeh kvízu"><span id="progress"></span></div>
+      <p class="count" id="count">Odpovedané 0 z 3</p>
+      <div id="questions"></div>
+      <section class="result" id="result" aria-live="polite">
+        <h2 id="mood-title"></h2><p id="summary"></p>
+        <div class="mood" role="img" aria-label="Mierka výsledku od 0 do 100">
+          <div class="mood-labels"><span id="result-low">Pokojnejšie</span><span id="result-mid">Vyvážene</span><span id="result-high">Žiarivo</span></div>
+          <div class="meter"><span class="marker" id="marker"></span></div>
+          <span class="scale-number" id="scale-number"></span>
+        </div>
+        <div class="actions"><button class="action secondary" id="again" type="button">Skúsiť novú trojicu</button></div>
+        <button class="action large" id="next-step" type="button" hidden></button>
+      </section>
+      <p class="note">Je to len hravá momentka nálady — nálada sa môže meniť.</p>
+    </section>
+  </main>
+  <script>
+    const questionBanks = {
+      mood: [
+      'Mám dnes dosť energie na veci, ktoré chcem robiť.',
+      'V poslednom čase sa viem úprimne potešiť aj maličkostiam.',
+      'Cítim sa dnes pokojne a uvoľnene.',
+      'Teším sa na niečo, čo ma dnes alebo čoskoro čaká.',
+      'Mám chuť tráviť čas s ľuďmi, na ktorých mi záleží.',
+      'Dnes sa mi darí pozerať na veci s nadhľadom.',
+      'Cítim sa spokojne s tým, ako mi dnes veci idú.',
+      'Mám dnes chuť skúsiť niečo nové alebo tvorivé.',
+      'Viem si nájsť chvíľu na oddych bez výčitiek.',
+      'Cítim podporu od niekoho vo svojom okolí.',
+      'Dnes verím, že zvládnem to, čo ma čaká.',
+      'Viem pomenovať aspoň jednu vec, za ktorú som dnes vďačný/á.'
+      ],
+      achievement: [
+        'Dnes som sa naučil/a niečo nové alebo si zopakoval/a dôležité učivo.',
+        'Urobil/a som aspoň malý krok k svojmu cieľu.',
+        'Dokončil/a som úlohu, ktorú som potreboval/a vybaviť.',
+        'Venoval/a som čas niečomu, čo je pre mňa dôležité.',
+        'Skúsil/a som aj niečo, čo pre mňa nebolo úplne jednoduché.',
+        'Vyriešil/a som problém alebo som sa posunul/a k jeho riešeniu.',
+        'Dodržal/a som aspoň jeden plán, ktorý som si na dnes dal/a.',
+        'Požiadal/a som o pomoc alebo som niekomu pomohol/pomohla.',
+        'Urobil/a som niečo, na čo môžem byť dnes hrdý/á.',
+        'Aj keď sa niečo nepodarilo, skúsil/a som to znova alebo inak.',
+        'Dnes som si našiel/našla čas na oddych, ktorý som potreboval/a.',
+        'Na konci dňa viem pomenovať aspoň jednu vec, ktorú som zvládol/zvládla.'
+      ],
+      focus: [
+        'Vedel/a som sa sústrediť na jednu dôležitú úlohu.',
+        'Dokázal/a som obmedziť vyrušovanie, keď som niečo potreboval/a dokončiť.',
+        'Urobil/a som si krátku prestávku, keď moja pozornosť klesala.',
+        'Začal/a som s úlohou bez príliš dlhého odkladania.',
+        'Vedel/a som, čo je dnes pre mňa najdôležitejšie.',
+        'Dokončil/a som aspoň jednu vec bez zbytočného preskakovania medzi úlohami.',
+        'Keď som stratil/a pozornosť, dokázal/a som sa k úlohe vrátiť.',
+        'Pripravil/a som si prostredie tak, aby sa mi pracovalo alebo učilo ľahšie.',
+        'Venoval/a som učeniu alebo práci čas bez zbytočných prerušení.',
+        'Rozdelil/a som si väčšiu úlohu na menšie kroky.',
+        'Na konci práce alebo učenia som si skontroloval/a, čo som stihol/stihla.',
+        'Mám pocit, že som svoju pozornosť využil/a dobre.'
+      ],
+      balance: [
+        'Naplánoval/a som si deň tak, aby som vedel/a, čomu sa venovať.',
+        'Nechal/a som si čas aj na oddych a jedlo.',
+        'Dokázal/a som upraviť plán, keď sa niečo zmenilo.',
+        'Rozdelil/a som si povinnosti na zvládnuteľné časti.',
+        'Našiel/našla som si chvíľu na pohyb alebo pobyt vonku.',
+        'Doprial/a som si prestávku skôr, než som bol/a úplne vyčerpaný/á.',
+        'Vedel/a som povedať nie alebo odložiť niečo, čo dnes nebolo dôležité.',
+        'Venoval/a som čas škole, práci alebo cieľom bez toho, aby zabrali celý deň.',
+        'Večer som si pripravil/a aspoň jednu vec na zajtrajšok.',
+        'Udržal/a som primeranú rovnováhu medzi povinnosťami a voľným časom.',
+        'Keď som potreboval/a pomoc, skúsil/a som si o ňu povedať.',
+        'Dnes som si vytvoril/a chvíľu, v ktorej som nemusel/a nič stíhať.'
+      ]
+    };
+    const root = document.querySelector('#questions');
+    const count = document.querySelector('#count');
+    const progress = document.querySelector('#progress');
+    const result = document.querySelector('#result');
+    const answers = new Map();
+    let selected = [];
+    let rainTimer;
+    const rain = document.querySelector('#emoji-rain');
+    const choices = [{label:'Áno',score:1},{label:'Možno',score:0},{label:'Nie',score:-1}];
+    let currentTest='mood';
+    const resultScores={mood:null,achievement:null,focus:null,balance:null};
+    document.querySelector('#username').addEventListener('input',event=>event.currentTarget.setCustomValidity(''));
+    document.querySelector('#password').addEventListener('input',event=>event.currentTarget.setCustomValidity(''));
+    const testInfo={
+      mood:{title:'Ako sa dnes cítiš?',description:'Vyber odpoveď, ktorá najlepšie vystihuje dnešný deň.',labels:['Pokojnejšie','Vyvážene','Žiarivo']},
+      achievement:{title:'Čo som dnes dosiahol/a?',description:'Zamysli sa nad dnešným učením, cieľmi a malými krokmi.',labels:['Ešte nie','Čiastočne','Podarilo sa']},
+      focus:{title:'Ako som sa sústredil/a?',description:'Zamysli sa nad pozornosťou, učením a dokončovaním úloh.',labels:['Rozptýlene','Čiastočne','Sústredene']},
+      balance:{title:'Ako som si rozdelil/a deň?',description:'Pozri sa na plánovanie, povinnosti a čas na oddych.',labels:['Bez rovnováhy','Čiastočne','Dobrá rovnováha']}
+    };
+    const improvementTips={
+      mood:'dopraj si krátku prestávku alebo chvíľu s niekým, pri kom sa cítiš dobre',
+      achievement:'vyber si jeden malý cieľ a rozdeľ ho na jednoduchý prvý krok',
+      focus:'skús 15 minút bez vyrušovania venovať jednej úlohe',
+      balance:'naplánuj si jednu povinnosť aj konkrétny čas na oddych'
+    };
+    const loginScreen=document.querySelector('#login-screen');
+    const menuScreen=document.querySelector('#menu-screen');
+    const testScreen=document.querySelector('#test-screen');
+    function showScreen(screen) { [loginScreen,menuScreen,testScreen].forEach(item=>item.hidden=item!==screen); window.scrollTo({top:0,behavior:'smooth'}); }
+    document.querySelector('#login-form').addEventListener('submit',event=>{
+      event.preventDefault();
+      const name=document.querySelector('#username').value.trim();
+      const password=document.querySelector('#password').value;
+      const usernameInput=document.querySelector('#username');
+      const passwordInput=document.querySelector('#password');
+      usernameInput.setCustomValidity('');
+      passwordInput.setCustomValidity('');
+      if (name.length<3 || name.length>12 || !/\p{L}/u.test(name) || !/^[\p{L}\p{N}_]+$/u.test(name)) {
+        usernameInput.setCustomValidity('Meno musí mať 3 až 12 znakov, obsahovať aspoň jedno písmeno a môže obsahovať aj čísla alebo podčiarkovník.');
+        usernameInput.reportValidity();
+        return;
+      }
+      if (password.length<7 || /^\p{L}+$/u.test(password)) {
+        passwordInput.setCustomValidity('Heslo musí mať aspoň 7 znakov a obsahovať aspoň jedno číslo alebo symbol.');
+        passwordInput.reportValidity();
+        return;
+      }
+      document.querySelector('#welcome-name').textContent=name;
+      passwordInput.value='';
+      showScreen(menuScreen);
+    });
+    document.querySelector('#logout').addEventListener('click',()=>showScreen(loginScreen));
+    document.querySelector('#start-mood-test').addEventListener('click',()=>openTest('mood'));
+    document.querySelector('#start-achievement-test').addEventListener('click',()=>openTest('achievement'));
+    document.querySelector('#start-focus-test').addEventListener('click',()=>openTest('focus'));
+    document.querySelector('#start-balance-test').addEventListener('click',()=>openTest('balance'));
+    function openTest(type) {
+      currentTest=type;
+      const info=testInfo[type];
+      document.querySelector('#test-title').textContent=info.title;
+      document.querySelector('#test-description').textContent=info.description;
+      document.querySelector('#result-low').textContent=info.labels[0];
+      document.querySelector('#result-mid').textContent=info.labels[1];
+      document.querySelector('#result-high').textContent=info.labels[2];
+      newRound(); showScreen(testScreen);
+    }
+    document.querySelector('#show-score').addEventListener('click',()=>document.querySelector('#productivity-panel').scrollIntoView({behavior:'smooth',block:'center'}));
+    document.querySelector('#next-step').addEventListener('click',()=>{
+      const next=['mood','achievement','focus','balance'].find(type=>resultScores[type]===null);
+      if (next) openTest(next);
+      else {
+        showScreen(menuScreen);
+        setTimeout(()=>document.querySelector('#productivity-panel').scrollIntoView({behavior:'smooth',block:'center'}),100);
+      }
+    });
+    document.querySelector('#back-menu').addEventListener('click',()=>{ clearTimeout(rainTimer); rain.replaceChildren(); showScreen(menuScreen); });
+
+    function newRound() {
+      clearTimeout(rainTimer);
+      rain.replaceChildren();
+      selected = [...questionBanks[currentTest]].sort(() => Math.random() - 0.5).slice(0,3);
+      answers.clear();
+      result.classList.remove('show');
+      count.textContent = 'Odpovedané 0 z 3';
+      progress.style.width = '0%';
+      root.replaceChildren(...selected.map((text,index) => {
+        const card = document.createElement('section');
+        card.className = 'question';
+        const title = document.createElement('h2');
+        title.textContent = `${index+1}. ${text}`;
+        const buttons = document.createElement('div');
+        buttons.className = 'answers';
+        choices.forEach((choice,choiceIndex) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = choice.label;
+          button.setAttribute('aria-pressed','false');
+          button.addEventListener('click',() => choose(index,choiceIndex,buttons));
+          buttons.append(button);
+        });
+        card.append(title,buttons);
+        return card;
+      }));
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+
+    function choose(questionIndex,choiceIndex,buttons) {
+      answers.set(questionIndex,choices[choiceIndex].score);
+      [...buttons.children].forEach((button,index) => button.setAttribute('aria-pressed',String(index===choiceIndex)));
+      count.textContent = `Odpovedané ${answers.size} z 3`;
+      progress.style.width = `${answers.size/3*100}%`;
+      if (answers.size === 3) showResult();
+      else result.classList.remove('show');
+    }
+
+    function showResult() {
+      const total = [...answers.values()].reduce((sum,value)=>sum+value,0);
+      const value = Math.round(((total+3)/6)*100);
+      let title,description;
+      if (currentTest==='achievement') {
+        if (total >= 2) { title='Pekný dnešný pokrok! 🎯'; description='Z odpovedí vidno, že si dnes dosiahol/dosiahla viacero vecí. Aj malé kroky sa počítajú.'; }
+        else if (total === 1) { title='Niečo sa podarilo 🌱'; description='Dnes si urobil/a aspoň jeden dobrý krok. Pokračuj vlastným tempom.'; }
+        else if (total === 0) { title='Každý deň je iný 🌿'; description='Niečo možno vyšlo a niečo ešte čaká. Skús si všimnúť aj malé úspechy.'; }
+        else if (total === -1) { title='Malý krok stačí ☁️'; description='Možno bol dnešok náročný. Oddych aj požiadať o pomoc môžu byť tiež dôležitým krokom.'; }
+        else { title='Zajtra je nová možnosť 🌙'; description='Nemusí sa všetko podariť naraz. Buď k sebe láskavý/á a vyber si jeden malý krok.'; }
+      } else if (currentTest==='focus') {
+        if (total >= 2) { title='Výborné sústredenie! 🧠'; description='Darilo sa ti venovať pozornosť dôležitým veciam. Všímaj si, čo ti pomohlo.'; }
+        else if (total === 1) { title='Dobré chvíle sústredenia 🌱'; description='Niečo sa ti podarilo dokončiť. Krátke prestávky môžu pomôcť udržať pozornosť.'; }
+        else if (total === 0) { title='Sústredenie sa mení 🌿'; description='Každému niekedy myšlienky odbiehajú. Pomôže vybrať si jednu malú úlohu.'; }
+        else if (total === -1) { title='Skús spomaliť ☁️'; description='Možno bolo dnes ťažké udržať pozornosť. Krátky oddych môže byť dobrý začiatok.'; }
+        else { title='Jeden krok naraz 🌙'; description='Nemusíš zvládnuť všetko naraz. Skús si vybrať jednu jednoduchú úlohu.'; }
+      } else if (currentTest==='balance') {
+        if (total >= 2) { title='Pekná rovnováha ⚖️'; description='Darilo sa ti skĺbiť povinnosti a oddych. Skús si všimnúť, čo ti v tom pomohlo.'; }
+        else if (total === 1) { title='Našiel/našla si priestor 🌱'; description='Aspoň niečo sa ti podarilo zladiť. Malý plán môže uľahčiť aj zajtrajšok.'; }
+        else if (total === 0) { title='Rovnováha sa hľadá 🌿'; description='Niektoré veci sa zmestili, iné možno nie. Je v poriadku upraviť tempo.'; }
+        else if (total === -1) { title='Dopraj si pauzu ☁️'; description='Možno toho bolo dnes veľa. Skús si naplánovať krátky oddych.'; }
+        else { title='Oddych je tiež dôležitý 🌙'; description='Keď je deň náročný, stačí začať jednou potrebnou vecou a chvíľou pre seba.'; }
+      } else {
+        if (total >= 2) { title='Nálada na vzostupe ☀️'; description='Z odpovedí cítiť veľa pozitívnej energie. Skús si ju užiť a dopriať si niečo príjemné.'; }
+        else if (total === 1) { title='Svetlejšia nálada 🌤️'; description='Dnešok má viac svetlých chvíľ. Všímaj si, čo ti robí dobre.'; }
+        else if (total === 0) { title='Vyvážená nálada 🌿'; description='Odpovede ukazujú na zmiešaný, pomerne vyrovnaný deň. Dopraj si tempo, ktoré ti vyhovuje.'; }
+        else if (total === -1) { title='Pokojnejší deň ☁️'; description='Možno sa dnes oplatí spomaliť a vybrať si jednu malú vec, ktorá ti spraví dobre.'; }
+        else { title='Deň na jemnejšiu starostlivosť 🌙'; description='Vyzerá to na náročnejší deň. Skús byť k sebe láskavý/á a obrátiť sa na niekoho, komu dôveruješ.'; }
+      }
+      document.querySelector('#mood-title').textContent=title;
+      document.querySelector('#summary').textContent=description;
+      document.querySelector('#marker').style.left=`${value}%`;
+      document.querySelector('#scale-number').textContent=`Mierka výsledku: ${value} zo 100`;
+      const prefix=currentTest==='mood'?'dashboard':currentTest;
+      document.querySelector(`#${prefix}-marker`).style.left=`${value}%`;
+      document.querySelector(`#${prefix}-number`).textContent=`Výsledok: ${value} zo 100`;
+      document.querySelector(`#${prefix}-copy`).textContent=`Posledný výsledok: ${value} zo 100.`;
+      resultScores[currentTest]=value;
+      updateProductivity();
+      const allComplete=Object.values(resultScores).every(score=>score!==null);
+      const nextStep=document.querySelector('#next-step');
+      nextStep.textContent=allComplete?'Prejsť k výsledkom':'Prejsť na ďalší test';
+      nextStep.hidden=false;
+      result.classList.add('show');
+      showEmojiRain(total);
+    }
+
+    function updateProductivity() {
+      const entries=Object.entries(resultScores);
+      if (entries.some(([,value])=>value===null)) {
+        const completed=entries.filter(([,value])=>value!==null).length;
+        document.querySelector('#productivity-copy').textContent=`Absolvované testy: ${completed} zo 4. Dokonči všetky štyri a vypočítam spoločný výsledok.`;
+        document.querySelector('#productivity-panel').hidden=true;
+        document.querySelector('#show-score').hidden=true;
+        return;
+      }
+      const average=Math.round(entries.reduce((sum,[,value])=>sum+value,0)/entries.length);
+      const lowest=[...entries].sort((a,b)=>a[1]-b[1])[0][0];
+      const highest=[...entries].sort((a,b)=>b[1]-a[1])[0][0];
+      const labels={mood:'nálada',achievement:'dosiahnuté ciele',focus:'sústredenie',balance:'rovnováha'};
+      document.querySelector('#productivity-score').textContent=`${average} / 100`;
+      document.querySelector('#productivity-marker').style.left=`${average}%`;
+      document.querySelector('#productivity-copy').textContent='Denný výsledok je priemerom nálady, dosiahnutých cieľov, sústredenia a rovnováhy.';
+      document.querySelector('#productivity-tip').textContent=`Opri sa o svoju silnú stránku v oblasti ${labels[highest]} a zajtra skús ${improvementTips[lowest]}.`;
+      document.querySelector('#productivity-panel').hidden=false;
+      document.querySelector('#show-score').hidden=false;
+    }
+
+    function showEmojiRain(total) {
+      clearTimeout(rainTimer);
+      const set = total >= 2 ? ['😄','😊','✨','🌈','🥳','💛'] : total === 1 ? ['🙂','🌤️','✨','🌼','💚'] : total === 0 ? ['😌','🌿','☁️','🫧','🍃'] : total === -1 ? ['☁️','🌧️','🌙','🫶','💙'] : ['🌧️','🌙','🫶','☁️','💜'];
+      rain.replaceChildren(...Array.from({length:38},()=>{
+        const item=document.createElement('span');
+        item.className='rain-emoji';
+        item.textContent=set[Math.floor(Math.random()*set.length)];
+        item.style.left=`${Math.random()*100}%`;
+        item.style.fontSize=`${18+Math.random()*22}px`;
+        item.style.animationDelay=`${Math.random()*0.45}s`;
+        item.style.setProperty('--drift',`${Math.random()*150-75}px`);
+        item.style.setProperty('--spin',`${Math.random()*440-220}deg`);
+        return item;
+      }));
+      rainTimer=setTimeout(()=>rain.replaceChildren(),5500);
+    }
+
+    document.querySelector('#again').addEventListener('click',newRound);
+    newRound();
+  </script>
+</body>
+</html>
+
