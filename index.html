@@ -59,6 +59,7 @@
     .account-actions button.secondary { background:#fff; color:var(--green) }
     .account-actions button[aria-pressed="true"] { background:var(--green); color:#fff }
     .account-status { min-height:1.2em; margin:0; color:var(--muted); font-size:.84rem; line-height:1.45 }
+    .account-status.is-error { padding:11px 13px; border:1px solid #e3a6a0; border-radius:10px; background:#fff0ee; color:#9c2722; font-size:.96rem; font-weight:750; line-height:1.4 }
     .menu-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0 }
     .menu-buttons button { padding:12px; border-color:var(--green); background:var(--green); color:#fff }
     .menu-buttons button.secondary { background:#fff; color:var(--green) }
@@ -283,13 +284,15 @@
       document.querySelector('#account-create-mode').classList.toggle('secondary',!creating);
       accountSubmit.textContent=creating?'Vytvoriť účet':'Prihlásiť sa';
       accountStatus.textContent='';
+      accountStatus.classList.remove('is-error');
     }
     document.querySelector('#account-login-mode').addEventListener('click',()=>setAccountMode('login'));
     document.querySelector('#account-create-mode').addEventListener('click',()=>setAccountMode('create'));
-    accountForm.addEventListener('input',()=>accountStatus.textContent='');
+    accountForm.addEventListener('input',()=>{ accountStatus.textContent=''; accountStatus.classList.remove('is-error'); });
     accountForm.addEventListener('submit',async event=>{
       event.preventDefault();
       accountStatus.textContent='';
+      accountStatus.classList.remove('is-error');
       if (accountMode==='create') {
         const name=accountName.value.trim();
         if (name.length<3 || name.length>12 || !/\p{L}/u.test(name) || !/^[\p{L}\p{N}_]+$/u.test(name)) {
@@ -336,6 +339,7 @@
           'auth/too-many-requests':'Príliš veľa pokusov. Počkaj chvíľu a skús znova.'
         };
         accountStatus.textContent=messages[error.code] || 'Účet sa nepodarilo overiť. Skús to znova.';
+        accountStatus.classList.add('is-error');
       } finally {
         accountSubmit.disabled=false;
       }
@@ -597,6 +601,7 @@
         };
         document.querySelector('#resend-verification').addEventListener('click',async event=>{
           const button=event.currentTarget;
+          document.querySelector('#account-auth-status').classList.remove('is-error');
           button.disabled=true;
           try {
             await window.resendFirebaseVerification();
@@ -609,6 +614,7 @@
         });
         document.querySelector('#check-verification').addEventListener('click',async event=>{
           const button=event.currentTarget;
+          document.querySelector('#account-auth-status').classList.remove('is-error');
           button.disabled=true;
           document.querySelector('#account-auth-status').textContent='Kontrolujem potvrdenie e-mailu…';
           try {
@@ -629,6 +635,7 @@
           await signOut(auth);
           document.querySelector('#verification-actions').hidden=true;
           document.querySelector('#account-auth-status').textContent='';
+          document.querySelector('#account-auth-status').classList.remove('is-error');
         });
         signInButton.disabled=false;
         status.textContent='Prihlás sa bezpečne pomocou svojho Google účtu.';
@@ -654,6 +661,7 @@
           if (user && user.providerData.some(item=>item.providerId==='password') && !user.emailVerified) {
             verificationActions.hidden=false;
             accountStatus.textContent='E-mail ešte nie je potvrdený. Otvor overovací odkaz a potom sa vráť sem.';
+            accountStatus.classList.remove('is-error');
             return;
           }
           verificationActions.hidden=true;
