@@ -53,6 +53,11 @@
     .google-status { margin:8px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; text-align:center }
     .login-divider { display:flex; align-items:center; gap:12px; margin:20px 0 0; color:var(--muted); font-size:.78rem }
     .login-divider::before,.login-divider::after { content:""; height:1px; flex:1; background:var(--line) }
+    .account-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+    .account-actions button { padding:10px; border-color:var(--green); background:var(--green); color:#fff }
+    .account-actions button.secondary { background:#fff; color:var(--green) }
+    .account-actions button[aria-pressed="true"] { background:var(--green); color:#fff }
+    .account-status { min-height:1.2em; margin:0; color:var(--muted); font-size:.84rem; line-height:1.45 }
     .menu-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0 }
     .menu-buttons button { padding:12px; border-color:var(--green); background:var(--green); color:#fff }
     .menu-buttons button.secondary { background:#fff; color:var(--green) }
@@ -90,13 +95,19 @@
           </button>
           <p class="google-status" id="google-auth-status" role="status">Na zapnutie Google prihlásenia treba najprv nastaviť Firebase projekt.</p>
         </div>
-        <p class="login-divider"><span>alebo ukážkový vstup</span></p>
+        <p class="login-divider"><span>alebo sa prihlás e-mailom</span></p>
         <form class="login-form" id="login-form">
-          <label for="username">Používateľské meno<input id="username" name="username" autocomplete="username" minlength="3" maxlength="12" required><small>3 až 12 znakov, musí obsahovať aspoň jedno písmeno.</small></label>
-          <label for="password">Heslo<input id="password" name="password" type="password" autocomplete="current-password" minlength="7" required><small>Najmenej 7 znakov, aspoň jedno číslo alebo symbol.</small></label>
-          <button class="action" type="submit">Prihlásiť sa</button>
+          <div class="account-actions" role="group" aria-label="Typ účtu">
+            <button id="account-login-mode" type="button" aria-pressed="true">Prihlásiť sa</button>
+            <button id="account-create-mode" class="secondary" type="button" aria-pressed="false">Vytvoriť účet</button>
+          </div>
+          <label id="account-name-label" for="account-name" hidden>Meno<input id="account-name" name="name" autocomplete="name" minlength="3" maxlength="40"><small>Zobrazí sa v tvojom menu.</small></label>
+          <label for="account-email">E-mail<input id="account-email" name="email" type="email" autocomplete="email" required></label>
+          <label for="account-password">Heslo<input id="account-password" name="password" type="password" autocomplete="current-password" minlength="7" required><small>Najmenej 7 znakov a aspoň jedno číslo alebo symbol.</small></label>
+          <button class="action" id="account-submit" type="submit">Prihlásiť sa</button>
+          <p class="account-status" id="account-auth-status" role="status" aria-live="polite"></p>
         </form>
-        <p class="login-note">Ukážkové prihlásenie: údaje sa neoverujú ani neukladajú. Na skutočné účty je potrebný server.</p>
+        <p class="login-note">Účet zabezpečuje Firebase. Tvoje heslo sa na tejto stránke neukladá.</p>
       </div>
     </section>
 
@@ -245,8 +256,75 @@
     const choices = [{label:'Áno',score:1},{label:'Možno',score:0},{label:'Nie',score:-1}];
     let currentTest='mood';
     const resultScores={mood:null,achievement:null,focus:null,balance:null};
-    document.querySelector('#username').addEventListener('input',event=>event.currentTarget.setCustomValidity(''));
-    document.querySelector('#password').addEventListener('input',event=>event.currentTarget.setCustomValidity(''));
+    let accountMode='login';
+    const accountForm=document.querySelector('#login-form');
+    const accountName=document.querySelector('#account-name');
+    const accountNameLabel=document.querySelector('#account-name-label');
+    const accountPassword=document.querySelector('#account-password');
+    const accountSubmit=document.querySelector('#account-submit');
+    const accountStatus=document.querySelector('#account-auth-status');
+    function setAccountMode(mode) {
+      accountMode=mode;
+      const creating=mode==='create';
+      accountNameLabel.hidden=!creating;
+      accountName.required=creating;
+      accountPassword.autocomplete=creating?'new-password':'current-password';
+      document.querySelector('#account-login-mode').setAttribute('aria-pressed',String(!creating));
+      document.querySelector('#account-create-mode').setAttribute('aria-pressed',String(creating));
+      document.querySelector('#account-login-mode').classList.toggle('secondary',creating);
+      document.querySelector('#account-create-mode').classList.toggle('secondary',!creating);
+      accountSubmit.textContent=creating?'Vytvoriť účet':'Prihlásiť sa';
+      accountStatus.textContent='';
+    }
+    document.querySelector('#account-login-mode').addEventListener('click',()=>setAccountMode('login'));
+    document.querySelector('#account-create-mode').addEventListener('click',()=>setAccountMode('create'));
+    accountForm.addEventListener('input',()=>accountStatus.textContent='');
+    accountForm.addEventListener('submit',async event=>{
+      event.preventDefault();
+      accountStatus.textContent='';
+      if (accountMode==='create') {
+        const name=accountName.value.trim();
+        if (name.length<3 || name.length>12 || !/\p{L}/u.test(name) || !/^[\p{L}\p{N}_]+$/u.test(name)) {
+          accountName.setCustomValidity('Meno musí mať 3 až 12 znakov, obsahovať písmeno a môže obsahovať čísla alebo podčiarkovník.');
+          accountName.reportValidity();
+          return;
+        }
+        accountName.setCustomValidity('');
+      }
+      const password=accountPassword.value;
+      if (password.length<7 || /^\p{L}+$/u.test(password)) {
+        accountPassword.setCustomValidity('Heslo musí mať aspoň 7 znakov a obsahovať číslo alebo symbol.');
+        accountPassword.reportValidity();
+        return;
+      }
+      accountPassword.setCustomValidity('');
+      if (!window.submitFirebaseAccount) {
+        accountStatus.textContent='Prihlásenie sa ešte načítava. Skús to o chvíľu znova.';
+        return;
+      }
+      accountSubmit.disabled=true;
+      accountStatus.textContent=accountMode==='create'?'Vytváram účet…':'Prihlasujem…';
+      try {
+        await window.submitFirebaseAccount({mode:accountMode,name:accountName.value.trim(),email:document.querySelector('#account-email').value.trim(),password});
+        accountPassword.value='';
+        accountStatus.textContent='';
+      } catch(error) {
+        const messages={
+          'auth/email-already-in-use':'Tento e-mail už má účet. Skús sa prihlásiť.',
+          'auth/invalid-email':'Skontroluj formát e-mailovej adresy.',
+          'auth/invalid-credential':'E-mail alebo heslo nie je správne.',
+          'auth/user-not-found':'Účet s týmto e-mailom sa nenašiel. Najprv si vytvor účet.',
+          'auth/wrong-password':'Heslo nie je správne.',
+          'auth/weak-password':'Heslo je príliš slabé. Použi aspoň 7 znakov a číslo alebo symbol.',
+          'auth/operation-not-allowed':'E-mailové účty ešte nie sú zapnuté. Skús to neskôr.',
+          'auth/network-request-failed':'Nepodarilo sa pripojiť. Skontroluj internet a skús znova.',
+          'auth/too-many-requests':'Príliš veľa pokusov. Počkaj chvíľu a skús znova.'
+        };
+        accountStatus.textContent=messages[error.code] || 'Účet sa nepodarilo overiť. Skús to znova.';
+      } finally {
+        accountSubmit.disabled=false;
+      }
+    });
     const testInfo={
       mood:{title:'Ako sa dnes cítiš?',description:'Vyber odpoveď, ktorá najlepšie vystihuje dnešný deň.',labels:['Pokojnejšie','Vyvážene','Žiarivo']},
       achievement:{title:'Čo som dnes dosiahol/a?',description:'Zamysli sa nad dnešným učením, cieľmi a malými krokmi.',labels:['Ešte nie','Čiastočne','Podarilo sa']},
@@ -464,11 +542,19 @@
           import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')
         ]);
         const {initializeApp}=appSdk;
-        const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut}=authSdk;
+        const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,createUserWithEmailAndPassword,signInWithEmailAndPassword,updateProfile}=authSdk;
         const app=initializeApp(firebaseConfig);
         const auth=getAuth(app);
         const provider=new GoogleAuthProvider();
         auth.languageCode='sk';
+        window.submitFirebaseAccount=async({mode,name,email,password})=>{
+          if (mode==='create') {
+            const credential=await createUserWithEmailAndPassword(auth,email,password);
+            await updateProfile(credential.user,{displayName:name});
+          } else {
+            await signInWithEmailAndPassword(auth,email,password);
+          }
+        };
         signInButton.disabled=false;
         status.textContent='Prihlás sa bezpečne pomocou svojho Google účtu.';
         signInButton.addEventListener('click',async()=>{
