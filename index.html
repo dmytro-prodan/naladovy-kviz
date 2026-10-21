@@ -551,6 +551,7 @@
           if (mode==='create') {
             const credential=await createUserWithEmailAndPassword(auth,email,password);
             await updateProfile(credential.user,{displayName:name});
+            window.completeGoogleLogin(credential.user);
           } else {
             await signInWithEmailAndPassword(auth,email,password);
           }
